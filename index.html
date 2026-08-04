@@ -5,91 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>附件转公开链接</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    body {
-      padding: 16px;
-      background: #f5f5f5;
-    }
-    .container {
-      max-width: 400px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    h3 {
-      margin-bottom: 16px;
-      color: #333;
-    }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    label {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 14px;
-      color: #666;
-    }
-    select, button {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    button {
-      background: #0066ff;
-      color: white;
-      border: none;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    .log {
-      margin-top: 16px;
-      padding: 12px;
-      background: #f0f0f0;
-      border-radius: 4px;
-      font-size: 12px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    .log p {
-      margin: 4px 0;
-    }
-    .log .error {
-      color: #d93025;
-    }
-    .log .info {
-      color: #1a73e8;
-    }
-    .log .success {
-      color: #34a853;
-    }
-    .env-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-    .env-feishu {
-      background: #e8f0fe;
-      color: #1a73e8;
-    }
-    .env-browser {
-      background: #f1f3f4;
-      color: #5f6368;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 16px; background: #f5f5f5; }
+    .container { max-width: 400px; margin: 0 auto; background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h3 { margin-bottom: 16px; color: #333; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; margin-bottom: 4px; font-size: 14px; color: #666; }
+    select, button { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    button { background: #0066ff; color: white; border: none; cursor: pointer; margin-top: 8px; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .log { margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 4px; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    .log p { margin: 4px 0; }
+    .log .error { color: #d93025; }
+    .log .info { color: #1a73e8; }
+    .log .success { color: #34a853; }
+    .env-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-bottom: 8px; }
+    .env-feishu { background: #e8f0fe; color: #1a73e8; }
+    .env-browser { background: #f1f3f4; color: #5f6368; }
   </style>
 </head>
 <body>
@@ -117,22 +49,13 @@
     <div class="log" id="log"></div>
   </div>
 
+  <!-- 引入飞书官方 SDK -->
+  <script src="https://lf3-cn-tx.byteacops.com/obj/feishu-open-platform/bitable-js-sdk/0.1.12/bitable-js-sdk.umd.js"></script>
   <script>
+    const { bitable } = window;
     let isFeishuEnv = false;
-    let bitable = null;
     let tableId = '';
     let viewId = '';
-
-    // 模拟数据（浏览器调试用）
-    const mockColumns = [
-      { name: '模特图', fieldId: 'model_img' },
-      { name: '参考图', fieldId: 'ref_img' },
-      { name: '链接输出', fieldId: 'link_out' }
-    ];
-    const mockRecords = [
-      { recordId: 'rec_1', fields: { model_img: [{ url: 'https://example.com/model1.jpg' }], ref_img: [{ url: 'https://example.com/ref1.jpg' }] } },
-      { recordId: 'rec_2', fields: { model_img: [{ url: 'https://example.com/model2.jpg' }], ref_img: [] } }
-    ];
 
     const logEl = document.getElementById('log');
     const envBadgeEl = document.getElementById('envBadge');
@@ -149,14 +72,6 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    function getBitable() {
-      if (window.larkBase) return window.larkBase;
-      if (window.bitable) return window.bitable;
-      if (window.feishu?.bitable) return window.feishu.bitable;
-      if (window.lark?.bitable) return window.lark.bitable;
-      return null;
-    }
-
     async function init(manual = false) {
       if (manual) appendLog('🔄 手动重新初始化...');
       else appendLog('🚀 开始初始化飞书多维表格环境...');
@@ -168,64 +83,33 @@
       linkSelect.innerHTML = '<option>加载中...</option>';
 
       try {
-        bitable = getBitable();
-
-        if (bitable) {
-          isFeishuEnv = true;
-          envBadgeEl.className = 'env-badge env-feishu';
-          envBadgeEl.textContent = '✅ 飞书多维表格环境';
-          appendLog('✅ 检测到飞书多维表格环境');
-
-          if (typeof bitable.ready === 'function') {
-            await bitable.ready();
-          }
-
-          let context = null;
-          if (typeof bitable.getAppContext === 'function') {
-            context = await bitable.getAppContext();
-            tableId = context.tableId;
-            viewId = context.viewId;
-            appendLog(`✅ 当前表格ID: ${tableId}, 视图ID: ${viewId}`);
-          } else {
-            appendLog('⚠️ 未获取到上下文，将使用当前视图');
-          }
-
-          let tableMeta = null;
-          if (typeof bitable.getTableMeta === 'function') {
-            tableMeta = await bitable.getTableMeta({ tableId });
-          } else if (bitable.env?.getTableMeta) {
-            tableMeta = await bitable.env.getTableMeta({ tableId });
-          } else if (bitable.bridge?.getTableMeta) {
-            tableMeta = await bitable.bridge.getTableMeta({ tableId });
-          } else {
-            throw new Error('无法获取表格字段');
-          }
-
-          const columns = tableMeta.fields || [];
-          appendLog(`✅ 成功获取 ${columns.length} 个字段`);
-
-          attachSelect.innerHTML = '<option value="">请选择附件列</option>';
-          linkSelect.innerHTML = '<option value="">请选择输出列</option>';
-          columns.forEach(col => {
-            const name = col.name || col.title || '未命名';
-            const id = col.fieldId || col.id;
-            attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
-            linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
-          });
-        } else {
-          isFeishuEnv = false;
-          envBadgeEl.className = 'env-badge env-browser';
-          envBadgeEl.textContent = '🔍 浏览器模拟模式';
-          appendLog('ℹ️ 未检测到飞书环境，进入模拟模式');
-
-          attachSelect.innerHTML = '<option value="">请选择附件列</option>';
-          linkSelect.innerHTML = '<option value="">请选择输出列</option>';
-          mockColumns.forEach(col => {
-            attachSelect.innerHTML += `<option value="${col.fieldId}">${col.name}</option>`;
-            linkSelect.innerHTML += `<option value="${col.fieldId}">${col.name}</option>`;
-          });
-          appendLog('✅ 模拟字段加载完成');
+        if (!bitable) {
+          throw new Error('未加载飞书多维表格 SDK，请确保在插件中打开此页面');
         }
+
+        isFeishuEnv = true;
+        envBadgeEl.className = 'env-badge env-feishu';
+        envBadgeEl.textContent = '✅ 飞书多维表格环境';
+        appendLog('✅ 检测到飞书多维表格环境');
+
+        await bitable.ready();
+        const context = await bitable.getAppContext();
+        tableId = context.tableId;
+        viewId = context.viewId;
+        appendLog(`✅ 当前表格ID: ${tableId}, 视图ID: ${viewId}`);
+
+        const tableMeta = await bitable.getTableMeta({ tableId });
+        const columns = tableMeta.fields || [];
+        appendLog(`✅ 成功获取 ${columns.length} 个字段`);
+
+        attachSelect.innerHTML = '<option value="">请选择附件列</option>';
+        linkSelect.innerHTML = '<option value="">请选择输出列</option>';
+        columns.forEach(col => {
+          const name = col.name || '未命名';
+          const id = col.fieldId;
+          attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
+          linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
+        });
 
         attachSelect.disabled = false;
         linkSelect.disabled = false;
@@ -236,8 +120,8 @@
         console.error(err);
         isFeishuEnv = false;
         envBadgeEl.className = 'env-badge env-browser';
-        envBadgeEl.textContent = '🔍 浏览器模拟模式';
-        appendLog('⚠️ 已自动切换到模拟模式');
+        envBadgeEl.textContent = '🔍 浏览器模式（无法转换）';
+        appendLog('⚠️ 请在飞书多维表格自定义插件中打开此页面，才能真正转换链接');
       }
     }
 
@@ -250,24 +134,21 @@
         return;
       }
 
+      if (!isFeishuEnv || !bitable) {
+        appendLog('❌ 请在飞书多维表格插件中打开此页面，才能执行转换', true);
+        return;
+      }
+
       appendLog(`🚀 开始转换：附件列=${attachColId}，输出列=${linkColId}`);
       convertBtn.disabled = true;
 
       try {
-        let records;
-        if (isFeishuEnv) {
-          if (typeof bitable.getRecords === 'function') {
-            records = await bitable.getRecords({ tableId, viewId, fieldIds: [attachColId] });
-          } else if (bitable.bridge?.getRecords) {
-            records = await bitable.bridge.getRecords({ tableId, viewId, fieldIds: [attachColId] });
-          } else {
-            throw new Error('无法获取记录');
-          }
-          appendLog(`✅ 获取到 ${records.length} 条记录`);
-        } else {
-          records = mockRecords;
-          appendLog(`ℹ️ 模拟模式：使用 ${records.length} 条测试数据`);
-        }
+        const records = await bitable.getRecords({
+          tableId,
+          viewId,
+          fieldIds: [attachColId]
+        });
+        appendLog(`✅ 获取到 ${records.length} 条记录`);
 
         for (let i = 0; i < records.length; i++) {
           const record = records[i];
@@ -279,22 +160,16 @@
             continue;
           }
 
-          // 把所有附件URL用换行拼接
           const urls = attachValue.map(file => file.url).join('\n');
           appendLog(`ℹ️ 记录 ${i+1}：提取到 ${attachValue.length} 个链接`);
 
-          if (isFeishuEnv) {
-            if (typeof bitable.setRecordValue === 'function') {
-              await bitable.setRecordValue({ tableId, recordId, fieldId: linkColId, value: urls });
-            } else if (bitable.bridge?.setRecordValue) {
-              await bitable.bridge.setRecordValue({ tableId, recordId, fieldId: linkColId, value: urls });
-            } else {
-              throw new Error('无法写入链接');
-            }
-            appendLog(`✅ 记录 ${i+1}：链接已写入表格`);
-          } else {
-            appendLog(`✅ 记录 ${i+1}：模拟写入链接 → ${urls}`);
-          }
+          await bitable.setRecordValue({
+            tableId,
+            recordId,
+            fieldId: linkColId,
+            value: urls
+          });
+          appendLog(`✅ 记录 ${i+1}：链接已写入表格`);
         }
 
         appendLog('🎉 全部转换完成！');
@@ -307,8 +182,6 @@
     });
 
     reinitBtn.addEventListener('click', () => init(true));
-
-    // 页面加载完成后自动初始化
     window.addEventListener('load', () => init());
   </script>
 </body>
