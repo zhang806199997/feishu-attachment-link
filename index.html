@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>附件转链接</title>
+  <script src="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-100-M/axios/1.6.0/axios.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      padding: 20px;
+      background: #f5f6f7;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    h2 {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: #1f2937;
+    }
+    .form-item {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    select, button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+    }
+    button {
+      background: #0077ff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .tip {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .log {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 6px;
+      font-size: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>多维表格附件转公开链接</h2>
+    <div class="form-item">
+      <label>附件所在列</label>
+      <select id="attachCol">
+        <option value="">加载中...</option>
+      </select>
+    </div>
+    <div class="form-item">
+      <label>链接输出列</label>
+      <select id="linkCol">
+        <option value="">加载中...</option>
+      </select>
+    </div>
+    <button id="startBtn">开始转换</button>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const app = window.__msdk__;
+    const $ = (id) => document.getElementById(id);
+
+    let tables = [];
+    let currentTable;
+    let recordList = [];
+
+    // 初始化
+    (async () => {
+      try {
+        await app.ready();
+        const base = await app.getBaseInfo();
+        tables = await app.getTables();
+        currentTable = tables[0];
+
+        const fields = await app.getFields({ tableId: currentTable.id });
+        recordList = await app.getRecords({ tableId: currentTable.id });
+
+        const attachFields = fields.filter(f => f.type === 'attachment');
+        const textFields = fields.filter(f => f.type === 'text' || f.type === 'url');
+
+        const attachSel = $('attachCol');
+        attachSel.innerHTML = '';
+        attachFields.forEach(f => {
+          attachSel.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+        });
+
+        const linkSel = $('linkCol');
+        linkSel.innerHTML = '';
+        textFields.forEach(f => {
+          linkSel.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+        });
+
+        log('初始化完成，共 ' + recordList.length + ' 条记录');
+      } catch (e) {
+        log('初始化失败：' + e.message);
+      }
+    })();
+
+    // 日志
+    function log(msg) {
+      const d = new Date().toLocaleTimeString();
+      $('log').textContent += `[${d}] ${msg}\n`;
+      $('log').scrollTop = $('log').scrollHeight;
+    }
+
+    // 转换
+    $('startBtn').onclick = async () => {
+      const attachFieldId = $('attachCol').value;
+      const linkFieldId = $('linkCol').value;
+      if (!attachFieldId || !linkFieldId) {
+        log('请选择列');
+        return;
+      }
+
+      const btn = $('startBtn');
+      btn.disabled = true;
+      btn.textContent = '处理中...';
+
+      try {
+        for (let record of recordList) {
+          const attach = record.fields[attachFieldId];
+          if (!attach || !Array.isArray(attach) || attach.length === 0) {
+            log(`记录 ${record.recordId}：无附件`);
+            continue;
+          }
+
+          const file = attach[0];
+          if (!file.fileToken) {
+            log(`记录 ${record.recordId}：无 fileToken`);
+            continue;
+          }
+
+          // 获取公开链接
+          const url = await getPublicUrl(file.fileToken);
+          log(`记录 ${record.recordId}：${url}`);
+
+          // 写入链接
+          await app.updateRecord({
+            tableId: currentTable.id,
+            recordId: record.recordId,
+            fields: {
+              [linkFieldId]: url
+            }
+          });
+        }
+        log('✅ 全部处理完成');
+      } catch (e) {
+        log('❌ 错误：' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '开始转换';
+      }
+    };
+
+    // 获取附件公开链接（核心）
+    async function getPublicUrl(fileToken) {
+      const { data } = await axios.post('https://www.feishu.cn/space/api/box/forward', {
+        file_token: fileToken,
+        type: 1,
+        permission: 0
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      if (data.code !== 0) throw new Error(data.msg);
+      return data.data.url;
+    }
+  </script>
+</body>
+</html>
