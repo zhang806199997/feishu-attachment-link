@@ -63,18 +63,9 @@
     font-family: monospace;
     color: #24292f;
   }
-  .status-badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-    margin-bottom: 12px;
-  }
-  .status-ready { background: #d4edda; color: #155724; }
-  .status-error { background: #f8d7da; color: #721c24; }
-  .status-waiting { background: #fff3cd; color: #856404; }
 </style>
+<!-- 引入飞书新版多维表格 SDK -->
+<script src="https://lf16-cn-tx.byteacctns.com/obj/feishu-static/lark-base-open-js-sdk/v0.0.12/index.js"></script>
 </head>
 <body>
 <div class="card">
@@ -98,42 +89,29 @@
   <button id="convertBtn">开始转换</button>
   <button id="reinitBtn" class="secondary">🔄 重新初始化</button>
 
-  <div id="log">[系统] 正在等待飞书环境就绪...</div>
+  <div id="log">[系统] 正在初始化飞书多维表格环境...</div>
 </div>
 
 <script>
-// ============================================================
-// 完整脚本 - 兼容多种飞书插件环境
-// ============================================================
-
-// -------- 工具：输出日志并保留历史 --------
+// -------- 工具：输出日志 --------
 const logEl = document.getElementById('log');
 function appendLog(msg, isError = false) {
   const time = new Date().toLocaleTimeString();
   const prefix = isError ? '❌' : 'ℹ️';
   const line = `[${time}] ${prefix} ${msg}`;
   logEl.textContent += (logEl.textContent ? '\n' : '') + line;
-  console.log(line);
-  // 自动滚动到底部
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-// -------- 获取 bitable 对象（兼容多种全局变量） --------
-function findBitable() {
-  // 尝试多种可能的全局对象
-  if (window.bitable) return window.bitable;
-  if (window.feishu && window.feishu.bitable) return window.feishu.bitable;
-  if (window.lark && window.lark.bitable) return window.lark.bitable;
-  return null;
-}
+// -------- 全局变量 --------
+let bitable = null;
+let tableId = '';
+let viewId = '';
 
-// -------- 初始化主函数 --------
+// -------- 初始化函数 --------
 async function init(manual = false) {
-  if (!manual) {
-    appendLog('开始初始化...');
-  } else {
-    appendLog('手动重新初始化...');
-  }
+  if (manual) appendLog('🔄 手动重新初始化...');
+  else appendLog('🚀 开始初始化...');
 
   // 清空下拉框
   const attachSelect = document.getElementById('attachCol');
@@ -143,97 +121,44 @@ async function init(manual = false) {
   attachSelect.disabled = true;
   linkSelect.disabled = true;
 
-  // 等待 window.bitable 出现，最多等待 10 秒（100 次 * 100ms）
-  let retries = 0;
-  const maxRetries = 100;
-  const interval = 100;
-
-  let bitable = findBitable();
-  while (!bitable && retries < maxRetries) {
-    await new Promise(r => setTimeout(r, interval));
-    bitable = findBitable();
-    retries++;
-    if (retries % 10 === 0) {
-      appendLog(`等待环境... (${retries * interval / 1000}s)`);
-    }
-  }
-
-  if (!bitable) {
-    appendLog('❌ 未检测到飞书多维表格环境，请确保在自定义插件中打开', true);
-    appendLog('💡 提示：请将该 HTML 作为飞书多维表格的“自定义插件”上传并使用，不要直接在浏览器打开', true);
-    return;
-  }
-
-  appendLog('✅ 已捕获 window.bitable 对象');
-
-  // 调试：打印 bitable 的结构
   try {
-    const keys = Object.keys(bitable);
-    appendLog(`bitable 包含属性: ${keys.join(', ')}`);
-    if (bitable.bridge) {
-      appendLog('检测到 bitable.bridge');
+    // 1. 初始化新版 SDK
+    if (!window.larkBase) {
+      throw new Error('未加载飞书多维表格 SDK，请检查 script 引入');
     }
-  } catch (e) {
-    // 忽略
-  }
+    bitable = window.larkBase;
+    await bitable.ready();
+    appendLog('✅ 飞书多维表格 SDK 初始化成功');
 
-  // -------- 调用 ready（兼容多种写法） --------
-  try {
-    let readyMethod = null;
-    if (typeof bitable.ready === 'function') {
-      readyMethod = bitable.ready;
-      appendLog('使用 bitable.ready()');
-    } else if (bitable.bridge && typeof bitable.bridge.ready === 'function') {
-      readyMethod = bitable.bridge.ready.bind(bitable.bridge);
-      appendLog('使用 bitable.bridge.ready()');
-    } else if (bitable.env && typeof bitable.env.ready === 'function') {
-      readyMethod = bitable.env.ready.bind(bitable.env);
-      appendLog('使用 bitable.env.ready()');
-    }
+    // 2. 获取当前表格和视图信息
+    const context = await bitable.getAppContext();
+    tableId = context.tableId;
+    viewId = context.viewId;
+    appendLog(`✅ 当前表格ID: ${tableId}, 视图ID: ${viewId}`);
 
-    if (readyMethod) {
-      await readyMethod();
-      appendLog('✅ ready() 调用成功');
-    } else {
-      appendLog('⚠️ 未找到 ready 方法，尝试直接使用（可能已就绪）');
-    }
-  } catch (err) {
-    appendLog(`❌ ready 调用失败: ${err.message}`, true);
-    // 继续尝试获取表格信息
-  }
+    // 3. 获取表格字段列表
+    const tableMeta = await bitable.getTableMeta({ tableId });
+    const columns = tableMeta.fields || [];
+    appendLog(`✅ 成功获取表格字段，共 ${columns.length} 列`);
 
-  // -------- 获取表格元数据 --------
-  try {
-    let table;
-    if (typeof bitable.getTableMeta === 'function') {
-      table = await bitable.getTableMeta();
-    } else if (bitable.bridge && typeof bitable.bridge.getTableMeta === 'function') {
-      table = await bitable.bridge.getTableMeta();
-    } else {
-      throw new Error('无法找到 getTableMeta 方法');
-    }
-
-    const columns = table.fields || [];
-    appendLog(`✅ 成功获取表格，共 ${columns.length} 列`);
-
-    // 填充下拉框
+    // 4. 填充下拉框
     attachSelect.innerHTML = '<option value="">请选择附件所在列</option>';
     linkSelect.innerHTML = '<option value="">请选择链接输出列</option>';
-
     columns.forEach(col => {
-      const name = col.name || col.title || '未命名';
-      const id = col.id || col.key || '';
+      const name = col.name;
+      const id = col.fieldId;
       attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
       linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
     });
 
     attachSelect.disabled = false;
     linkSelect.disabled = false;
-    appendLog('✅ 下拉框已填充，可以使用');
+    appendLog('✅ 下拉框已加载完成，可以选择列并开始转换');
 
   } catch (err) {
-    appendLog(`❌ 获取表格数据失败: ${err.message}`, true);
-    console.error(err);
+    appendLog(`❌ 初始化失败: ${err.message}`, true);
+    appendLog('💡 提示：请确保在飞书多维表格自定义插件中打开此页面，不要直接在浏览器打开', true);
+    console.error('初始化错误:', err);
   }
 }
 
@@ -247,19 +172,57 @@ document.getElementById('reinitBtn').addEventListener('click', () => {
   init(true);
 });
 
-// -------- “开始转换”按钮（功能示例） --------
-document.getElementById('convertBtn').addEventListener('click', function() {
-  const attachVal = document.getElementById('attachCol').value;
-  const linkVal = document.getElementById('linkCol').value;
-  if (!attachVal || !linkVal) {
-    appendLog('⚠️ 请先选择附件列和链接输出列', true);
+// -------- 转换按钮逻辑 --------
+document.getElementById('convertBtn').addEventListener('click', async function() {
+  const attachColId = document.getElementById('attachCol').value;
+  const linkColId = document.getElementById('linkCol').value;
+
+  if (!attachColId || !linkColId) {
+    appendLog('⚠️ 请先选择【附件所在列】和【链接输出列】', true);
     return;
   }
-  appendLog(`🚀 开始转换：附件列=${attachVal}，链接列=${linkVal}`);
-  // 这里可以添加实际的转换逻辑
-  // 例如调用 bitable 的 API 读取附件并生成公开链接
-  // 注意：生成公开链接通常需要调用飞书云文档的开放接口，需要额外授权
-  appendLog('💡 转换功能待实现，请在此处补充业务逻辑');
+
+  appendLog(`🚀 开始转换：附件列ID=${attachColId}，链接列ID=${linkColId}`);
+
+  try {
+    // 1. 获取当前视图下的所有记录
+    const records = await bitable.getRecords({
+      tableId,
+      viewId,
+      fieldIds: [attachColId]
+    });
+    appendLog(`✅ 获取到 ${records.length} 条记录，开始处理附件...`);
+
+    // 2. 遍历记录，处理附件并更新链接列
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const recordId = record.recordId;
+      const attachValue = record.fields[attachColId];
+
+      if (!attachValue || attachValue.length === 0) {
+        appendLog(`ℹ️ 记录 ${i+1} 无附件，跳过`);
+        continue;
+      }
+
+      // 提取附件公开链接（飞书附件对象默认包含公开访问的 url）
+      const publicUrls = attachValue.map(file => file.url).join('\n');
+
+      // 3. 更新链接列
+      await bitable.setRecordValue({
+        tableId,
+        recordId,
+        fieldId: linkColId,
+        value: publicUrls
+      });
+
+      appendLog(`✅ 记录 ${i+1} 处理完成：已生成公开链接`);
+    }
+
+    appendLog('🎉 所有记录转换完成！');
+  } catch (err) {
+    appendLog(`❌ 转换失败: ${err.message}`, true);
+    console.error('转换错误:', err);
+  }
 });
 </script>
 </body>
