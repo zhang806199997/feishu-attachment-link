@@ -1,282 +1,315 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>附件转公开链接（兼容浏览器/飞书）</title>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    padding: 20px;
-    max-width: 500px;
-    margin: 20px auto;
-    background: #f9fafb;
-  }
-  .card {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    padding: 24px;
-  }
-  h2 { margin-top: 0; color: #1f2a3a; }
-  .field-group { margin-bottom: 16px; }
-  label { display: block; margin-bottom: 4px; font-weight: 500; color: #2c3e50; }
-  select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #d0d7de;
-    border-radius: 6px;
-    background: white;
-    font-size: 14px;
-  }
-  select:disabled { background: #f0f0f0; color: #888; }
-  button {
-    background: #0066ff;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 16px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 8px;
-  }
-  button:hover { background: #0050d0; }
-  button.secondary {
-    background: #e4e7ed;
-    color: #1f2a3a;
-    margin-top: 8px;
-  }
-  button.secondary:hover { background: #d0d5de; }
-  #log {
-    margin-top: 16px;
-    background: #f6f8fa;
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #e1e4e8;
-    font-family: monospace;
-    color: #24292f;
-  }
-  .env-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-    margin-bottom: 12px;
-  }
-  .env-feishu { background: #d4edda; color: #155724; }
-  .env-browser { background: #fff3cd; color: #856404; }
-</style>
-<!-- 飞书 SDK（仅在飞书环境中生效） -->
-<script src="https://lf16-cn-tx.byteacctns.com/obj/feishu-static/lark-base-open-js-sdk/v0.0.12/index.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>附件转公开链接</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      padding: 16px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h3 {
+      margin-bottom: 16px;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      color: #666;
+    }
+    select, button {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      background: #0066ff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .log {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .log p {
+      margin: 4px 0;
+    }
+    .log .error {
+      color: #d93025;
+    }
+    .log .info {
+      color: #1a73e8;
+    }
+    .log .success {
+      color: #34a853;
+    }
+    .env-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .env-feishu {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+    .env-browser {
+      background: #f1f3f4;
+      color: #5f6368;
+    }
+  </style>
 </head>
 <body>
-<div class="card">
-  <h2>📎 附件转公开链接</h2>
-  <div id="envBadge" class="env-badge env-browser">🔍 浏览器模式（模拟数据）</div>
-  <p style="color: #586069; margin-bottom: 20px;">多维表格附件转公开链接</p>
+  <div class="container">
+    <h3>附件转公开链接</h3>
+    <div id="envBadge" class="env-badge env-browser">🔍 检测环境中...</div>
 
-  <div class="field-group">
-    <label for="attachCol">附件所在列</label>
-    <select id="attachCol" disabled>
-      <option>加载中...</option>
-    </select>
+    <div class="form-group">
+      <label for="attachCol">附件所在列</label>
+      <select id="attachCol" disabled>
+        <option>加载中...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="linkCol">链接输出列</label>
+      <select id="linkCol" disabled>
+        <option>加载中...</option>
+      </select>
+    </div>
+
+    <button id="convertBtn" disabled>开始转换</button>
+    <button id="reinitBtn" style="background: #f1f3f4; color: #333; margin-top: 8px;">重新初始化</button>
+
+    <div class="log" id="log"></div>
   </div>
 
-  <div class="field-group">
-    <label for="linkCol">链接输出列</label>
-    <select id="linkCol" disabled>
-      <option>加载中...</option>
-    </select>
-  </div>
+  <script>
+    let isFeishuEnv = false;
+    let bitable = null;
+    let tableId = '';
+    let viewId = '';
 
-  <button id="convertBtn">开始转换</button>
-  <button id="reinitBtn" class="secondary">🔄 重新初始化</button>
+    // 模拟数据（浏览器调试用）
+    const mockColumns = [
+      { name: '模特图', fieldId: 'model_img' },
+      { name: '参考图', fieldId: 'ref_img' },
+      { name: '链接输出', fieldId: 'link_out' }
+    ];
+    const mockRecords = [
+      { recordId: 'rec_1', fields: { model_img: [{ url: 'https://example.com/model1.jpg' }], ref_img: [{ url: 'https://example.com/ref1.jpg' }] } },
+      { recordId: 'rec_2', fields: { model_img: [{ url: 'https://example.com/model2.jpg' }], ref_img: [] } }
+    ];
 
-  <div id="log">[系统] 正在初始化环境...</div>
-</div>
+    const logEl = document.getElementById('log');
+    const envBadgeEl = document.getElementById('envBadge');
+    const attachSelect = document.getElementById('attachCol');
+    const linkSelect = document.getElementById('linkCol');
+    const convertBtn = document.getElementById('convertBtn');
+    const reinitBtn = document.getElementById('reinitBtn');
 
-<script>
-// -------- 工具：输出日志 --------
-const logEl = document.getElementById('log');
-const envBadgeEl = document.getElementById('envBadge');
-function appendLog(msg, isError = false) {
-  const time = new Date().toLocaleTimeString();
-  const prefix = isError ? '❌' : 'ℹ️';
-  const line = `[${time}] ${prefix} ${msg}`;
-  logEl.textContent += (logEl.textContent ? '\n' : '') + line;
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
-// -------- 环境检测 --------
-let isFeishuEnv = false;
-let bitable = null;
-let tableId = '';
-let viewId = '';
-
-// 模拟数据（浏览器模式用）
-const mockColumns = [
-  { name: '附件', fieldId: 'attach_1' },
-  { name: '文件名', fieldId: 'name_1' },
-  { name: '公开链接', fieldId: 'link_1' },
-  { name: '备注', fieldId: 'remark_1' }
-];
-const mockRecords = [
-  { recordId: 'rec_1', fields: { attach_1: [{ url: 'https://example.com/file1.pdf' }] } },
-  { recordId: 'rec_2', fields: { attach_1: [{ url: 'https://example.com/file2.png' }] } },
-  { recordId: 'rec_3', fields: { attach_1: [] } }
-];
-
-// -------- 初始化函数 --------
-async function init(manual = false) {
-  if (manual) appendLog('🔄 手动重新初始化...');
-  else appendLog('🚀 开始初始化...');
-
-  // 清空下拉框
-  const attachSelect = document.getElementById('attachCol');
-  const linkSelect = document.getElementById('linkCol');
-  attachSelect.innerHTML = '<option>加载中...</option>';
-  linkSelect.innerHTML = '<option>加载中...</option>';
-  attachSelect.disabled = true;
-  linkSelect.disabled = true;
-
-  try {
-    // 检测是否在飞书环境
-    if (window.larkBase) {
-      isFeishuEnv = true;
-      envBadgeEl.className = 'env-badge env-feishu';
-      envBadgeEl.textContent = '✅ 飞书多维表格环境';
-      appendLog('✅ 检测到飞书多维表格环境');
-
-      // 飞书环境初始化
-      bitable = window.larkBase;
-      await bitable.ready();
-      const context = await bitable.getAppContext();
-      tableId = context.tableId;
-      viewId = context.viewId;
-      appendLog(`✅ 当前表格ID: ${tableId}, 视图ID: ${viewId}`);
-
-      const tableMeta = await bitable.getTableMeta({ tableId });
-      const columns = tableMeta.fields || [];
-      appendLog(`✅ 成功获取表格字段，共 ${columns.length} 列`);
-
-      // 填充下拉框
-      attachSelect.innerHTML = '<option value="">请选择附件所在列</option>';
-      linkSelect.innerHTML = '<option value="">请选择链接输出列</option>';
-      columns.forEach(col => {
-        const name = col.name;
-        const id = col.fieldId;
-        attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
-        linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
-      });
-    } else {
-      isFeishuEnv = false;
-      envBadgeEl.className = 'env-badge env-browser';
-      envBadgeEl.textContent = '🔍 浏览器模式（模拟数据）';
-      appendLog('ℹ️ 未检测到飞书环境，进入浏览器模拟模式');
-
-      // 浏览器环境：用模拟数据填充下拉框
-      attachSelect.innerHTML = '<option value="">请选择附件所在列</option>';
-      linkSelect.innerHTML = '<option value="">请选择链接输出列</option>';
-      mockColumns.forEach(col => {
-        const name = col.name;
-        const id = col.fieldId;
-        attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
-        linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
-      });
-      appendLog('✅ 模拟字段加载完成，可测试界面流程');
+    function appendLog(msg, isError = false) {
+      const p = document.createElement('p');
+      p.className = isError ? 'error' : 'info';
+      p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.appendChild(p);
+      logEl.scrollTop = logEl.scrollHeight;
     }
 
-    attachSelect.disabled = false;
-    linkSelect.disabled = false;
-    appendLog('✅ 初始化完成，可以选择列并开始转换');
-
-  } catch (err) {
-    appendLog(`❌ 初始化失败: ${err.message}`, true);
-    console.error('初始化错误:', err);
-  }
-}
-
-// -------- 转换按钮逻辑 --------
-document.getElementById('convertBtn').addEventListener('click', async function() {
-  const attachColId = document.getElementById('attachCol').value;
-  const linkColId = document.getElementById('linkCol').value;
-
-  if (!attachColId || !linkColId) {
-    appendLog('⚠️ 请先选择【附件所在列】和【链接输出列】', true);
-    return;
-  }
-
-  appendLog(`🚀 开始转换：附件列ID=${attachColId}，链接列ID=${linkColId}`);
-
-  try {
-    let records;
-    if (isFeishuEnv) {
-      // 飞书环境：真实获取记录
-      records = await bitable.getRecords({
-        tableId,
-        viewId,
-        fieldIds: [attachColId]
-      });
-      appendLog(`✅ 获取到 ${records.length} 条真实记录，开始处理...`);
-    } else {
-      // 浏览器环境：使用模拟记录
-      records = mockRecords;
-      appendLog(`ℹ️ 浏览器模式：使用 ${records.length} 条模拟记录`);
+    function getBitable() {
+      if (window.larkBase) return window.larkBase;
+      if (window.bitable) return window.bitable;
+      if (window.feishu?.bitable) return window.feishu.bitable;
+      if (window.lark?.bitable) return window.lark.bitable;
+      return null;
     }
 
-    // 遍历处理记录
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      const recordId = record.recordId;
-      const attachValue = record.fields[attachColId];
+    async function init(manual = false) {
+      if (manual) appendLog('🔄 手动重新初始化...');
+      else appendLog('🚀 开始初始化飞书多维表格环境...');
 
-      if (!attachValue || attachValue.length === 0) {
-        appendLog(`ℹ️ 记录 ${i+1} 无附件，跳过`);
-        continue;
-      }
+      attachSelect.disabled = true;
+      linkSelect.disabled = true;
+      convertBtn.disabled = true;
+      attachSelect.innerHTML = '<option>加载中...</option>';
+      linkSelect.innerHTML = '<option>加载中...</option>';
 
-      // 提取公开链接
-      const publicUrls = attachValue.map(file => file.url).join('\n');
+      try {
+        bitable = getBitable();
 
-      if (isFeishuEnv) {
-        // 飞书环境：真实更新表格
-        await bitable.setRecordValue({
-          tableId,
-          recordId,
-          fieldId: linkColId,
-          value: publicUrls
-        });
-        appendLog(`✅ 记录 ${i+1} 处理完成：已写入真实表格`);
-      } else {
-        // 浏览器环境：仅模拟更新
-        appendLog(`✅ 记录 ${i+1} 模拟处理完成：链接 = ${publicUrls}`);
+        if (bitable) {
+          isFeishuEnv = true;
+          envBadgeEl.className = 'env-badge env-feishu';
+          envBadgeEl.textContent = '✅ 飞书多维表格环境';
+          appendLog('✅ 检测到飞书多维表格环境');
+
+          if (typeof bitable.ready === 'function') {
+            await bitable.ready();
+          }
+
+          let context = null;
+          if (typeof bitable.getAppContext === 'function') {
+            context = await bitable.getAppContext();
+            tableId = context.tableId;
+            viewId = context.viewId;
+            appendLog(`✅ 当前表格ID: ${tableId}, 视图ID: ${viewId}`);
+          } else {
+            appendLog('⚠️ 未获取到上下文，将使用当前视图');
+          }
+
+          let tableMeta = null;
+          if (typeof bitable.getTableMeta === 'function') {
+            tableMeta = await bitable.getTableMeta({ tableId });
+          } else if (bitable.env?.getTableMeta) {
+            tableMeta = await bitable.env.getTableMeta({ tableId });
+          } else if (bitable.bridge?.getTableMeta) {
+            tableMeta = await bitable.bridge.getTableMeta({ tableId });
+          } else {
+            throw new Error('无法获取表格字段');
+          }
+
+          const columns = tableMeta.fields || [];
+          appendLog(`✅ 成功获取 ${columns.length} 个字段`);
+
+          attachSelect.innerHTML = '<option value="">请选择附件列</option>';
+          linkSelect.innerHTML = '<option value="">请选择输出列</option>';
+          columns.forEach(col => {
+            const name = col.name || col.title || '未命名';
+            const id = col.fieldId || col.id;
+            attachSelect.innerHTML += `<option value="${id}">${name}</option>`;
+            linkSelect.innerHTML += `<option value="${id}">${name}</option>`;
+          });
+        } else {
+          isFeishuEnv = false;
+          envBadgeEl.className = 'env-badge env-browser';
+          envBadgeEl.textContent = '🔍 浏览器模拟模式';
+          appendLog('ℹ️ 未检测到飞书环境，进入模拟模式');
+
+          attachSelect.innerHTML = '<option value="">请选择附件列</option>';
+          linkSelect.innerHTML = '<option value="">请选择输出列</option>';
+          mockColumns.forEach(col => {
+            attachSelect.innerHTML += `<option value="${col.fieldId}">${col.name}</option>`;
+            linkSelect.innerHTML += `<option value="${col.fieldId}">${col.name}</option>`;
+          });
+          appendLog('✅ 模拟字段加载完成');
+        }
+
+        attachSelect.disabled = false;
+        linkSelect.disabled = false;
+        convertBtn.disabled = false;
+        appendLog('✅ 初始化完成，可选择列并开始转换');
+      } catch (err) {
+        appendLog(`❌ 初始化失败: ${err.message}`, true);
+        console.error(err);
+        isFeishuEnv = false;
+        envBadgeEl.className = 'env-badge env-browser';
+        envBadgeEl.textContent = '🔍 浏览器模拟模式';
+        appendLog('⚠️ 已自动切换到模拟模式');
       }
     }
 
-    appendLog('🎉 所有记录转换完成！');
-  } catch (err) {
-    appendLog(`❌ 转换失败: ${err.message}`, true);
-    console.error('转换错误:', err);
-  }
-});
+    convertBtn.addEventListener('click', async () => {
+      const attachColId = attachSelect.value;
+      const linkColId = linkSelect.value;
 
-// -------- 页面加载后自动初始化 --------
-window.addEventListener('DOMContentLoaded', () => {
-  init();
-});
+      if (!attachColId || !linkColId) {
+        appendLog('⚠️ 请先选择【附件所在列】和【链接输出列】', true);
+        return;
+      }
 
-// -------- 手动重新初始化按钮 --------
-document.getElementById('reinitBtn').addEventListener('click', () => {
-  init(true);
-});
-</script>
+      appendLog(`🚀 开始转换：附件列=${attachColId}，输出列=${linkColId}`);
+      convertBtn.disabled = true;
+
+      try {
+        let records;
+        if (isFeishuEnv) {
+          if (typeof bitable.getRecords === 'function') {
+            records = await bitable.getRecords({ tableId, viewId, fieldIds: [attachColId] });
+          } else if (bitable.bridge?.getRecords) {
+            records = await bitable.bridge.getRecords({ tableId, viewId, fieldIds: [attachColId] });
+          } else {
+            throw new Error('无法获取记录');
+          }
+          appendLog(`✅ 获取到 ${records.length} 条记录`);
+        } else {
+          records = mockRecords;
+          appendLog(`ℹ️ 模拟模式：使用 ${records.length} 条测试数据`);
+        }
+
+        for (let i = 0; i < records.length; i++) {
+          const record = records[i];
+          const recordId = record.recordId;
+          const attachValue = record.fields[attachColId];
+
+          if (!attachValue || attachValue.length === 0) {
+            appendLog(`ℹ️ 记录 ${i+1}：无附件，跳过`);
+            continue;
+          }
+
+          // 把所有附件URL用换行拼接
+          const urls = attachValue.map(file => file.url).join('\n');
+          appendLog(`ℹ️ 记录 ${i+1}：提取到 ${attachValue.length} 个链接`);
+
+          if (isFeishuEnv) {
+            if (typeof bitable.setRecordValue === 'function') {
+              await bitable.setRecordValue({ tableId, recordId, fieldId: linkColId, value: urls });
+            } else if (bitable.bridge?.setRecordValue) {
+              await bitable.bridge.setRecordValue({ tableId, recordId, fieldId: linkColId, value: urls });
+            } else {
+              throw new Error('无法写入链接');
+            }
+            appendLog(`✅ 记录 ${i+1}：链接已写入表格`);
+          } else {
+            appendLog(`✅ 记录 ${i+1}：模拟写入链接 → ${urls}`);
+          }
+        }
+
+        appendLog('🎉 全部转换完成！');
+      } catch (err) {
+        appendLog(`❌ 转换失败: ${err.message}`, true);
+        console.error(err);
+      } finally {
+        convertBtn.disabled = false;
+      }
+    });
+
+    reinitBtn.addEventListener('click', () => init(true));
+
+    // 页面加载完成后自动初始化
+    window.addEventListener('load', () => init());
+  </script>
 </body>
 </html>
