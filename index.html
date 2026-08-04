@@ -1,19 +1,39 @@
 <script>
 // 多维表格自定义插件环境初始化
 async function init() {
-  // 1. 判断是否在多维表格自定义插件环境
-  if (!window.bitable) {
+  // 等待 SDK 注入，最多等 3 秒
+  let retryCount = 0;
+  const maxRetry = 30;
+  const interval = 100;
+
+  const waitForBitable = new Promise((resolve) => {
+    const check = () => {
+      if (window.bitable) {
+        resolve(window.bitable);
+      } else if (retryCount < maxRetry) {
+        retryCount++;
+        setTimeout(check, interval);
+      } else {
+        resolve(null);
+      }
+    };
+    check();
+  });
+
+  const bitable = await waitForBitable;
+
+  if (!bitable) {
     document.getElementById("log").textContent = "请在飞书多维表格自定义插件中打开";
     return;
   }
 
   try {
     // 2. 等待环境就绪（自定义插件用 bitable.ready）
-    await window.bitable.ready();
+    await bitable.ready();
     console.log("多维表格插件 SDK 初始化成功");
 
     // 3. 获取当前表格的列信息
-    const table = await window.bitable.getTableMeta();
+    const table = await bitable.getTableMeta();
     const columns = table.fields;
 
     // 4. 填充下拉框
