@@ -1,7 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>附件转公开链接</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; }
+  .field-group { margin-bottom: 15px; }
+  label { display: block; margin-bottom: 5px; font-weight: 500; }
+  select { width: 100%; padding: 8px; border: 1px solid #d0d7de; border-radius: 6px; }
+  button { background: #0066ff; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; }
+  button:hover { background: #0055dd; }
+  #log { margin-top: 15px; background: #f6f8fa; padding: 10px; border-radius: 6px; font-size: 14px; white-space: pre-wrap; word-break: break-all; min-height: 60px; }
+</style>
+</head>
+<body>
+<h2>附件转公开链接</h2>
+<p>多维表格附件转公开链接</p>
+
+<div class="field-group">
+  <label for="attachCol">附件所在列</label>
+  <select id="attachCol" disabled>
+    <option>加载中...</option>
+  </select>
+</div>
+
+<div class="field-group">
+  <label for="linkCol">链接输出列</label>
+  <select id="linkCol" disabled>
+    <option>加载中...</option>
+  </select>
+</div>
+
+<button id="convertBtn">开始转换</button>
+
+<div id="log">[等待初始化...]</div>
+
 <script>
-// 多维表格自定义插件环境初始化
+// ==================== 完整脚本 ====================
 async function init() {
-  // 等待 SDK 注入，最多等 3 秒
   let retryCount = 0;
   const maxRetry = 30;
   const interval = 100;
@@ -21,49 +57,66 @@ async function init() {
   });
 
   const bitable = await waitForBitable;
+  const logEl = document.getElementById('log');
 
   if (!bitable) {
-    document.getElementById("log").textContent = "请在飞书多维表格自定义插件中打开";
+    logEl.textContent = '请在飞书多维表格自定义插件中打开';
     return;
   }
 
   try {
-    // 2. 等待环境就绪（自定义插件用 bitable.ready）
-    await bitable.ready();
-    console.log("多维表格插件 SDK 初始化成功");
+    // ---------- 兼容不同版本的 ready 方法 ----------
+    if (typeof bitable.ready === 'function') {
+      await bitable.ready();
+    } else if (bitable.bridge && typeof bitable.bridge.ready === 'function') {
+      await bitable.bridge.ready();
+    } else {
+      console.warn('No ready method found, assuming environment is ready');
+    }
+    // -----------------------------------------------
 
-    // 3. 获取当前表格的列信息
+    console.log('多维表格插件 SDK 初始化成功');
+
     const table = await bitable.getTableMeta();
     const columns = table.fields;
 
-    // 4. 填充下拉框
-    const attachColSelect = document.getElementById("attachCol");
-    const linkColSelect = document.getElementById("linkCol");
-    
-    // 清空"加载中"选项
-    attachColSelect.innerHTML = "";
-    linkColSelect.innerHTML = "";
+    const attachColSelect = document.getElementById('attachCol');
+    const linkColSelect = document.getElementById('linkCol');
 
-    // 添加默认选项
-    attachColSelect.innerHTML = `<option value="">请选择附件所在列</option>`;
-    linkColSelect.innerHTML = `<option value="">请选择链接输出列</option>`;
+    // 清空并填充下拉选项
+    attachColSelect.innerHTML = '<option value="">请选择附件所在列</option>';
+    linkColSelect.innerHTML = '<option value="">请选择链接输出列</option>';
 
-    // 填充列数据
     columns.forEach(col => {
       attachColSelect.innerHTML += `<option value="${col.id}">${col.name}</option>`;
       linkColSelect.innerHTML += `<option value="${col.id}">${col.name}</option>`;
     });
 
-    // 启用下拉框
-    attachColSelect.removeAttribute("disabled");
-    linkColSelect.removeAttribute("disabled");
+    attachColSelect.removeAttribute('disabled');
+    linkColSelect.removeAttribute('disabled');
 
+    logEl.textContent = `[${new Date().toLocaleTimeString()}] 初始化成功，已加载 ${columns.length} 列`;
   } catch (err) {
-    console.error("初始化失败", err);
-    document.getElementById("log").textContent = `[${new Date().toLocaleTimeString()}] 初始化失败: ${err.message}`;
+    console.error('初始化失败', err);
+    logEl.textContent = `[${new Date().toLocaleTimeString()}] 初始化失败: ${err.message}`;
   }
 }
 
-// 页面加载完成后执行
-window.onload = init;
+// 页面加载时执行初始化
+window.addEventListener('DOMContentLoaded', init);
+
+// “开始转换”按钮点击事件（功能暂为占位，可按需实现）
+document.getElementById('convertBtn').addEventListener('click', function() {
+  const log = document.getElementById('log');
+  const attachCol = document.getElementById('attachCol').value;
+  const linkCol = document.getElementById('linkCol').value;
+  if (!attachCol || !linkCol) {
+    log.textContent = `[${new Date().toLocaleTimeString()}] 请选择完整的两列`;
+    return;
+  }
+  log.textContent = `[${new Date().toLocaleTimeString()}] 开始转换... (功能开发中)`;
+  // 实际转换逻辑可在此补充
+});
 </script>
+</body>
+</html>
