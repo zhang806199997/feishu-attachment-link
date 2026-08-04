@@ -1,131 +1,74 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>附件转链接</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { padding: 16px; background: #f5f5f5; }
-    .container { max-width: 360px; margin: 0 auto; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    h3 { margin-bottom: 16px; color: #333; }
-    .form-group { margin-bottom: 12px; }
-    label { display: block; margin-bottom: 4px; font-size: 14px; color: #666; }
-    select, button { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-    button { background: #0066ff; color: #fff; border: none; cursor: pointer; margin-top: 8px; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    .log { margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 4px; font-size: 12px; max-height: 200px; overflow-y: auto; }
-    .log p { margin: 4px 0; }
-    .log .error { color: #d93025; }
-    .log .info { color: #1a73e8; }
-    .log .success { color: #34a853; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h3>附件转公开链接</h3>
-    <div class="form-group">
-      <label>附件所在列</label>
-      <select id="attachCol" disabled>
-        <option>加载中...</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>链接输出列</label>
-      <select id="linkCol" disabled>
-        <option>加载中...</option>
-      </select>
-    </div>
-    <button id="convertBtn" disabled>开始转换</button>
-    <div class="log" id="log"></div>
-  </div>
+// src/index.tsx (数据表视图或侧边栏插件)
+import React, { useState, useEffect } from 'react';
+import { basekit, IField, IRecord } from '@lark-opdev/block-basekit';
 
-  <!-- 飞书官方 SDK -->
-  <script src="https://lf3-cn-tx.byteacops.com/obj/feishu-open-platform/bitable-js-sdk/0.1.12/bitable-js-sdk.umd.js"></script>
-  <script>
-    const { bitable } = window;
-    let tableId, viewId;
-    const logEl = document.getElementById('log');
-    const attachColEl = document.getElementById('attachCol');
-    const linkColEl = document.getElementById('linkCol');
-    const convertBtn = document.getElementById('convertBtn');
+const App = () => {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState('');
 
-    function log(msg, type = 'info') {
-      const p = document.createElement('p');
-      p.className = type;
-      p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-      logEl.appendChild(p);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
+  // 获取当前表格和记录上下文
+  const { table, record, field, view } = basekit.getBlockContext();
 
-    async function init() {
-      try {
-        await bitable.ready();
-        const ctx = await bitable.getAppContext();
-        tableId = ctx.tableId;
-        viewId = ctx.viewId;
-        log('✅ 飞书环境已就绪', 'success');
+  const handleConvert = async () => {
+    if (!record || !table) return;
+    setLoading(true);
+    setResult('');
 
-        const meta = await bitable.getTableMeta({ tableId });
-        const fields = meta.fields || [];
-        
-        attachColEl.innerHTML = '<option value="">请选择附件列</option>';
-        linkColEl.innerHTML = '<option value="">请选择输出列</option>';
-        fields.forEach(f => {
-          attachColEl.innerHTML += `<option value="${f.fieldId}">${f.name}</option>`;
-          linkColEl.innerHTML += `<option value="${f.fieldId}">${f.name}</option>`;
-        });
+    try {
+      // 1. 定义源字段（图片附件）和目标字段（文本）
+      // 注意：实际使用中，可以让用户通过UI选择字段，这里为了示例写死了字段名
+      const sourceFieldName = '图片'; 
+      const targetFieldName = '图片链接';
 
-        attachColEl.disabled = false;
-        linkColEl.disabled = false;
-        convertBtn.disabled = false;
-        log('✅ 字段加载完成，可开始转换', 'success');
-      } catch (e) {
-        log(`❌ 初始化失败：${e.message}`, 'error');
-        convertBtn.disabled = true;
-      }
-    }
+      // 获取源字段和目标字段的ID
+      const allFields = await table.getFieldList();
+      const sourceField = allFields.find(f => f.name === sourceFieldName);
+      const targetField = allFields.find(f => f.name === targetFieldName);
 
-    convertBtn.addEventListener('click', async () => {
-      const attachFieldId = attachColEl.value;
-      const linkFieldId = linkColEl.value;
-
-      if (!attachFieldId || !linkFieldId) {
-        log('⚠️ 请先选择附件列和输出列', 'error');
+      if (!sourceField || !targetField) {
+        setResult('错误：请确保表格中存在"图片"和"图片链接"字段');
         return;
       }
 
-      convertBtn.disabled = true;
-      log('🚀 开始转换...');
+      // 2. 获取当前记录的源字段值（图片附件）
+      const recordData = await table.getRecord(record.id);
+      const attachments = recordData.fields[sourceField.id] || [];
 
-      try {
-        const records = await bitable.getRecords({ tableId, viewId, fieldIds: [attachFieldId] });
-        log(`✅ 读取到 ${records.length} 条记录`);
-
-        for (const record of records) {
-          const files = record.fields[attachFieldId] || [];
-          if (files.length === 0) {
-            log(`ℹ️ 记录 ${record.recordId.slice(0, 6)}：无附件，跳过`, 'info');
-            continue;
-          }
-          const urls = files.map(f => f.url).join('\n');
-          await bitable.setRecordValue({
-            tableId,
-            recordId: record.recordId,
-            fieldId: linkFieldId,
-            value: urls
-          });
-          log(`✅ 记录 ${record.recordId.slice(0, 6)}：链接已写入`, 'success');
-        }
-        log('🎉 全部转换完成！', 'success');
-      } catch (e) {
-        log(`❌ 转换失败：${e.message}`, 'error');
-      } finally {
-        convertBtn.disabled = false;
+      if (attachments.length === 0) {
+        setResult('该记录没有图片附件');
+        return;
       }
-    });
 
-    window.addEventListener('load', init);
-  </script>
-</body>
-</html>
+      // 3. 获取每个附件的临时下载链接
+      // 每个附件对象包含 file_token, name, url 等属性
+      // 注意：从 recordData 中获取的附件对象已包含 tmp_url (临时链接)
+      // 如果希望主动调用API刷新链接，可以使用 basekit.getAttachmentUrl 方法
+      const links = attachments.map((att: any) => att.tmp_url || att.url).join('\n');
+
+      // 4. 将链接写入目标字段
+      await table.updateRecord(record.id, {
+        [targetField.id]: links
+      });
+
+      setResult(`✅ 成功转换 ${attachments.length} 张图片为链接`);
+
+    } catch (error: any) {
+      setResult(`❌ 转换失败: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px' }}>
+      <h3>🖼️ 图片转链接</h3>
+      <p>将当前行的「图片」附件转为链接，填入「图片链接」字段</p>
+      <button onClick={handleConvert} disabled={loading}>
+        {loading ? '转换中...' : '开始转换'}
+      </button>
+      {result && <p style={{ marginTop: '16px' }}>{result}</p>}
+    </div>
+  );
+};
+
+export default App;
