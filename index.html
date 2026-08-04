@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>飞书图片转公开链接</title>
+  <!-- 飞书官方 JSSDK（多维表格专用版本） -->
   <script src="https://lf3-cn-tx.bytecdn.cn/obj/obj-platform-static/feishu-jssdk/2.12.0/feishu-jssdk.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -24,85 +25,85 @@
     <div class="title">飞书图片转公开链接</div>
     <div class="desc">选择图片 → 自动上传 → 生成可分享链接</div>
     <button class="btn" id="upload">选择图片并上传</button>
-    <div id="status" class="status">等待飞书 SDK 初始化...</div>
+    <div id="status" class="status">正在检测飞书环境...</div>
     <div class="tip">仅在飞书客户端内打开有效</div>
   </div>
 
   <script>
-    const sdk = window.h5sdk;
     const uploadBtn = document.getElementById('upload');
     const statusEl = document.getElementById('status');
 
-    // 先判断是否在飞书客户端内
-    function isFeishuEnv() {
-      return /Feishu|lark/i.test(navigator.userAgent);
-    }
+    // 延迟等待 SDK 注入（多维表格插件环境需要一点时间）
+    setTimeout(() => {
+      const sdk = window.h5sdk;
 
-    if (!isFeishuEnv()) {
-      statusEl.textContent = '❌ 当前不在飞书客户端内，功能无法使用';
-      statusEl.className = 'status error';
-      uploadBtn.disabled = true;
-    } else {
-      // 飞书环境下初始化 SDK
+      // 检测是否在飞书客户端
+      const isFeishu = /Feishu|lark/i.test(navigator.userAgent);
+      if (!isFeishu) {
+        statusEl.textContent = '❌ 请在飞书客户端内打开此插件';
+        statusEl.className = 'status error';
+        uploadBtn.disabled = true;
+        return;
+      }
+
+      if (!sdk) {
+        statusEl.textContent = '❌ 飞书 SDK 未加载，请检查插件配置';
+        statusEl.className = 'status error';
+        uploadBtn.disabled = true;
+        return;
+      }
+
+      // 初始化 SDK
       sdk.ready(() => {
-        statusEl.textContent = '✅ SDK 初始化完成，可以点击上传';
+        statusEl.textContent = '✅ 环境就绪，点击按钮选择图片';
         statusEl.className = 'status success';
         uploadBtn.disabled = false;
       });
 
       sdk.error((err) => {
-        statusEl.textContent = `❌ SDK 初始化失败：${err.message || '未知错误'}`;
+        statusEl.textContent = `❌ SDK 错误：${err.message || '未知问题'}`;
         statusEl.className = 'status error';
         uploadBtn.disabled = true;
         console.error('SDK Error:', err);
       });
-    }
 
-    // 点击上传逻辑
-    uploadBtn.onclick = async () => {
-      if (!isFeishuEnv()) return;
-      uploadBtn.disabled = true;
-      statusEl.textContent = '⌛ 正在打开图片选择器...';
-      
-      try {
-        // 1. 选择图片
-        const pickRes = await sdk.biz.image.pickImage({
-          count: 1,
-          source: ['album'] // 先只选相册，简化测试
-        });
+      // 点击上传逻辑
+      uploadBtn.onclick = async () => {
+        uploadBtn.disabled = true;
+        statusEl.textContent = '⌛ 正在打开图片选择器...';
+        try {
+          // 调用飞书图片选择接口
+          const pickRes = await sdk.biz.image.pickImage({
+            count: 1,
+            source: ['album', 'camera']
+          });
 
-        if (!pickRes?.images?.length) throw new Error('未选择图片');
-        statusEl.textContent = '⌛ 正在上传图片...';
+          if (!pickRes?.images?.length) throw new Error('未选择图片');
+          statusEl.textContent = '⌛ 正在上传图片...';
 
-        // 2. 上传图片
-        const image = pickRes.images[0];
-        const uploadRes = await sdk.biz.image.uploadImage({
-          file: {
-            uri: image.uri,
-            name: image.name || 'image.jpg',
-            type: image.mime || 'image/jpeg'
-          }
-        });
+          // 上传图片获取公开链接
+          const image = pickRes.images[0];
+          const uploadRes = await sdk.biz.image.uploadImage({
+            file: {
+              uri: image.uri,
+              name: image.name || 'image.jpg',
+              type: image.mime || 'image/jpeg'
+            }
+          });
 
-        if (!uploadRes?.url) throw new Error('上传失败，未获取到链接');
-        statusEl.textContent = `✅ 上传成功！链接：${uploadRes.url}`;
-        statusEl.className = 'status success';
+          if (!uploadRes?.url) throw new Error('上传失败，未获取到链接');
+          statusEl.textContent = `✅ 上传成功！链接：${uploadRes.url}`;
+          statusEl.className = 'status success';
 
-        // 3. 自动写入多维表格（可选，先确保上传成功再开启）
-        // await sdk.biz.base.openTable({
-        //   tableId: '{{tableId}}',
-        //   recordId: '{{recordId}}',
-        //   fields: { "白底图转链接": uploadRes.url }
-        // });
-
-      } catch (e) {
-        statusEl.textContent = `❌ 操作失败：${e.message}`;
-        statusEl.className = 'status error';
-        console.error('Upload Error:', e);
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    };
+        } catch (e) {
+          statusEl.textContent = `❌ 操作失败：${e.message}`;
+          statusEl.className = 'status error';
+          console.error('Upload Error:', e);
+        } finally {
+          uploadBtn.disabled = false;
+        }
+      };
+    }, 500); // 延迟 500ms 等待 SDK 注入
   </script>
 </body>
 </html>
