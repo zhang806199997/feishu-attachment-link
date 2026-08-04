@@ -1,74 +1,63 @@
-// src/index.tsx (数据表视图或侧边栏插件)
-import React, { useState, useEffect } from 'react';
-import { basekit, IField, IRecord } from '@lark-opdev/block-basekit';
-
-const App = () => {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
-
-  // 获取当前表格和记录上下文
-  const { table, record, field, view } = basekit.getBlockContext();
-
-  const handleConvert = async () => {
-    if (!record || !table) return;
-    setLoading(true);
-    setResult('');
-
-    try {
-      // 1. 定义源字段（图片附件）和目标字段（文本）
-      // 注意：实际使用中，可以让用户通过UI选择字段，这里为了示例写死了字段名
-      const sourceFieldName = '图片'; 
-      const targetFieldName = '图片链接';
-
-      // 获取源字段和目标字段的ID
-      const allFields = await table.getFieldList();
-      const sourceField = allFields.find(f => f.name === sourceFieldName);
-      const targetField = allFields.find(f => f.name === targetFieldName);
-
-      if (!sourceField || !targetField) {
-        setResult('错误：请确保表格中存在"图片"和"图片链接"字段');
-        return;
-      }
-
-      // 2. 获取当前记录的源字段值（图片附件）
-      const recordData = await table.getRecord(record.id);
-      const attachments = recordData.fields[sourceField.id] || [];
-
-      if (attachments.length === 0) {
-        setResult('该记录没有图片附件');
-        return;
-      }
-
-      // 3. 获取每个附件的临时下载链接
-      // 每个附件对象包含 file_token, name, url 等属性
-      // 注意：从 recordData 中获取的附件对象已包含 tmp_url (临时链接)
-      // 如果希望主动调用API刷新链接，可以使用 basekit.getAttachmentUrl 方法
-      const links = attachments.map((att: any) => att.tmp_url || att.url).join('\n');
-
-      // 4. 将链接写入目标字段
-      await table.updateRecord(record.id, {
-        [targetField.id]: links
-      });
-
-      setResult(`✅ 成功转换 ${attachments.length} 张图片为链接`);
-
-    } catch (error: any) {
-      setResult(`❌ 转换失败: ${error.message}`);
-    } finally {
-      setLoading(false);
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的飞书网页应用</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-  };
+    body {
+      padding: 20px;
+      background: #f5f7fa;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 16px;
+      color: #1f2937;
+    }
+    p {
+      color: #4b5563;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #0066cc;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>飞书网页应用加载成功</h1>
+    <p>这是一个可直接部署到飞书开放平台的极简网页应用模板。</p>
+    <p>你可以在这里添加自己的页面、表单、接口调用等内容。</p>
+    <button class="btn" onclick="showInfo()">点我测试</button>
+  </div>
 
-  return (
-    <div style={{ padding: '20px' }}>
-      <h3>🖼️ 图片转链接</h3>
-      <p>将当前行的「图片」附件转为链接，填入「图片链接」字段</p>
-      <button onClick={handleConvert} disabled={loading}>
-        {loading ? '转换中...' : '开始转换'}
-      </button>
-      {result && <p style={{ marginTop: '16px' }}>{result}</p>}
-    </div>
-  );
-};
-
-export default App;
+  <script>
+    function showInfo() {
+      alert('飞书网页应用运行正常～')
+    }
+  </script>
+</body>
+</html>
