@@ -3,82 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>飞书图片转链接</title>
-  <script src="https://lf3-cn-tx.bytecdn.cn/obj/obj-platform-static/feishu-jssdk/2.12.0/jssdk.min.js"></script>
+  <title>飞书图片转公开链接</title>
+  <!-- 引入飞书官方 JSSDK -->
+  <script src="https://lf3-cn-tx.bytecdn.cn/obj/obj-platform-static/feishu-jssdk/2.12.0/feishu-jssdk.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;padding:20px}
-    .card{background:#fff;border-radius:12px;padding:24px;max-width:480px;margin:0 auto}
+    .card{background:#fff;border-radius:12px;padding:24px;max-width:480px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
     .title{font-size:18px;font-weight:600;margin-bottom:8px}
     .desc{color:#666;margin-bottom:20px}
-    .btn{width:100%;padding:14px;background:#0066ff;color:white;border:none;border-radius:10px;font-size:16px;margin-bottom:16px}
+    .btn{width:100%;padding:14px;background:#0066ff;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin-bottom:16px}
+    .btn:disabled{background:#ccc;cursor:not-allowed}
     #link{padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-top:12px;word-break:break-all;display:none}
     .copy{background:#666;margin-top:10px}
     .tip{font-size:12px;color:#999;margin-top:12px}
+    .status{margin-top:10px;padding:8px;border-radius:4px;font-size:14px}
+    .status.success{background:#e8f5e9;color:#2e7d32}
+    .status.error{background:#ffebee;color:#c62828}
   </style>
 </head>
-
 <body>
   <div class="card">
     <div class="title">飞书图片转公开链接</div>
     <div class="desc">选择图片 → 自动上传 → 生成可分享链接</div>
 
     <button class="btn" id="upload">选择图片并上传</button>
-
+    <div id="status" class="status"></div>
     <div id="link">
       <div style="font-weight:500;margin-bottom:6px">图片链接：</div>
       <div id="url"></div>
-      <button class="btn copy" id="copy">复制链接</button>
     </div>
-
     <div class="tip">仅在飞书客户端内打开有效</div>
   </div>
 
   <script>
     const sdk = window.h5sdk;
+    const uploadBtn = document.getElementById('upload');
+    const statusEl = document.getElementById('status');
+    const linkEl = document.getElementById('link');
+    const urlEl = document.getElementById('url');
 
-    // 初始化飞书 JSSDK
-    sdk.config({
-      jsApiList: [
-        'image.chooseImage',
-        'image.uploadImage'
-      ]
+    // 初始化飞书 SDK
+    sdk.ready(async () => {
+      statusEl.textContent = 'SDK 已就绪，可以选择图片';
+      statusEl.className = 'status success';
+      uploadBtn.disabled = false;
     });
 
-    // 选择图片 → 上传 → 拿链接
-    document.getElementById('upload').onclick = async () => {
+    // 监听错误
+    sdk.error((err) => {
+      statusEl.textContent = `SDK 错误：${err.message}`;
+      statusEl.className = 'status error';
+      uploadBtn.disabled = true;
+    });
+
+    // 选择并上传图片
+    uploadBtn.onclick = async () => {
       try {
-        // 1. 选图
-        const { tempFilePaths } = await sdk.image.chooseImage({
+        uploadBtn.disabled = true;
+        statusEl.textContent = '正在选择图片...';
+        statusEl.className = 'status';
+
+        // 1. 选择图片（飞书多维表格环境）
+        const pickRes = await sdk.biz.image.pickImage({
           count: 1,
-          sourceType: ['album', 'camera']
+          source: ['camera', 'album']
         });
 
-        const path = tempFilePaths[0];
+        if (!pickRes || pickRes.images.length === 0) {
+          throw new Error('未选择图片');
+        }
 
-        // 2. 上传到飞书素材
-        const { fileId } = await sdk.image.uploadImage({
-          localId: path
+        const imageInfo = pickRes.images[0];
+        statusEl.textContent = '正在上传图片...';
+
+        // 2. 上传图片到飞书（获取公开链接）
+        const uploadRes = await sdk.biz.image.uploadImage({
+          file: {
+            uri: imageInfo.uri,
+            name: imageInfo.name || 'image.jpg',
+            type: imageInfo.mime || 'image/jpeg'
+          }
         });
 
-        // 3. 拼接公开链接
-        const link = `https://p3-feishu-img.byteimg.com/obj/obj-open-platform-file/${fileId}`;
+        if (!uploadRes || !uploadRes.url) {
+          throw new Error('图片上传失败');
+        }
 
-        // 显示
-        document.getElementById('link').style.display = 'block';
-        document.getElementById('url').innerText = link;
+        const publicUrl = uploadRes.url;
+        urlEl.textContent = publicUrl;
+        linkEl.style.display = 'block';
+        statusEl.textContent = '✅ 图片上传成功，链接已生成';
+        statusEl.className = 'status success';
+
+        // 3. 自动写入当前多维表格字段（关键：自动转链接）
+        await sdk.biz.base.openTable({
+          tableId: '{{tableId}}', // 多维表格会自动注入
+          recordId: '{{recordId}}', // 多维表格会自动注入
+          fields: {
+            // 替换成你的字段名，比如 "白底图转链接"
+            "白底图转链接": publicUrl
+          }
+        });
+        statusEl.textContent = '✅ 图片链接已自动写入表格！';
 
       } catch (e) {
-        alert('失败：' + (e.message || '请在飞书内打开'));
+        statusEl.textContent = `❌ 失败：${e.message}`;
+        statusEl.className = 'status error';
         console.error(e);
+      } finally {
+        uploadBtn.disabled = false;
       }
-    };
-
-    // 复制
-    document.getElementById('copy').onclick = async () => {
-      const url = document.getElementById('url').innerText;
-      await navigator.clipboard.writeText(url);
-      alert('已复制');
     };
   </script>
 </body>
