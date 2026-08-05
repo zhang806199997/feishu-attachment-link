@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>飞书图片转链接</title>
+  <title>飞书图片转公开链接</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;padding:20px}
@@ -23,7 +23,7 @@
     <div class="title">飞书图片转公开链接</div>
     <div class="desc">选择图片 → 自动上传 → 生成可分享链接</div>
     <button class="btn" id="upload" disabled>选择图片并上传</button>
-    <div id="status" class="status">等待飞书客户端注入 SDK...</div>
+    <div id="status" class="status">⌛ 等待飞书客户端注入 SDK...</div>
     <div class="tip">仅在飞书客户端内打开有效</div>
   </div>
 
@@ -32,26 +32,26 @@
     const statusEl = document.getElementById('status');
     let sdk = null;
 
-    // 轮询等待 SDK 注入（飞书客户端会自动把 h5sdk 挂到 window 上）
-    function waitForSDK() {
+    // 轮询等待飞书自动注入 h5sdk
+    function waitForH5SDK() {
       if (window.h5sdk) {
         sdk = window.h5sdk;
-        initSDK();
+        initH5SDK();
       } else {
-        setTimeout(waitForSDK, 200); // 每 200ms 检查一次
+        setTimeout(waitForH5SDK, 300);
         statusEl.textContent = '⌛ 等待飞书客户端注入 SDK...';
       }
     }
 
-    function initSDK() {
+    function initH5SDK() {
       sdk.ready(() => {
-        statusEl.textContent = '✅ SDK 注入完成，点击按钮选择图片';
+        statusEl.textContent = '✅ SDK 就绪，点击按钮选择图片';
         statusEl.className = 'status success';
         uploadBtn.disabled = false;
       });
 
       sdk.error((err) => {
-        statusEl.textContent = `❌ SDK 错误：${err.message || '未知错误'}`;
+        statusEl.textContent = `❌ SDK 错误：${err.message || '权限不足或环境异常'}`;
         statusEl.className = 'status error';
         uploadBtn.disabled = true;
         console.error('SDK Error:', err);
@@ -59,7 +59,7 @@
     }
 
     // 开始等待 SDK
-    waitForSDK();
+    waitForH5SDK();
 
     // 点击上传逻辑
     uploadBtn.onclick = async () => {
@@ -68,16 +68,25 @@
       statusEl.textContent = '⌛ 正在打开图片选择器...';
       
       try {
-        const pickRes = await sdk.biz.image.pickImage({ count: 1, source: ['album'] });
+        // 选择图片
+        const pickRes = await sdk.biz.image.pickImage({
+          count: 1,
+          source: ['album']
+        });
         if (!pickRes?.images?.length) throw new Error('未选择图片');
-        
+
         statusEl.textContent = '⌛ 正在上传图片...';
+        // 上传图片
         const image = pickRes.images[0];
         const uploadRes = await sdk.biz.image.uploadImage({
-          file: { uri: image.uri, name: image.name || 'image.jpg', type: image.mime || 'image/jpeg' }
+          file: {
+            uri: image.uri,
+            name: image.name || 'image.jpg',
+            type: image.mime || 'image/jpeg'
+          }
         });
 
-        if (!uploadRes?.url) throw new Error('上传失败，未获取到链接');
+        if (!uploadRes?.url) throw new Error('上传失败，未获取到公开链接');
         statusEl.textContent = `✅ 上传成功！链接：${uploadRes.url}`;
         statusEl.className = 'status success';
       } catch (e) {
