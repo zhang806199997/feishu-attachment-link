@@ -1,102 +1,188 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>飞书图片转公开链接</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;padding:20px}
-    .card{background:#fff;border-radius:12px;padding:24px;max-width:480px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
-    .title{font-size:18px;font-weight:600;margin-bottom:8px}
-    .desc{color:#666;margin-bottom:20px}
-    .btn{width:100%;padding:14px;background:#0066ff;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin-bottom:16px}
-    .btn:disabled{background:#ccc;cursor:not-allowed}
-    .status{margin-top:10px;padding:8px;border-radius:4px;font-size:14px}
-    .status.success{background:#e8f5e9;color:#2e7d32}
-    .status.error{background:#ffebee;color:#c62828}
-    .tip{font-size:12px;color:#999;margin-top:12px}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="title">飞书图片转公开链接</div>
-    <div class="desc">选择图片 → 自动上传 → 生成可分享链接</div>
-    <button class="btn" id="upload" disabled>选择图片并上传</button>
-    <div id="status" class="status">⌛ 等待飞书客户端注入 SDK...</div>
-    <div class="tip">仅在飞书客户端内打开有效</div>
-  </div>
+import React, { useState, useEffect } from 'react';
+import { basekit, FieldType, IAttachmentCell, IImageCell } from '@lark-opdev/block-basekit-server-api';
 
-  <script>
-    const uploadBtn = document.getElementById('upload');
-    const statusEl = document.getElementById('status');
-    let sdk = null;
+// 插件主组件
+const App: React.FC = () => {
+  const [tableId, setTableId] = useState<string>('');
+  const [viewId, setViewId] = useState<string>('');
+  const [attachmentFields, setAttachmentFields] = useState<any[]>([]);
+  const [textFields, setTextFields] = useState<any[]>([]);
+  const [selectedAttachmentField, setSelectedAttachmentField] = useState<string>('');
+  const [selectedTextField, setSelectedTextField] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progress, setProgress] = useState<string>('');
 
-    // 轮询等待飞书自动注入 h5sdk
-    function waitForH5SDK() {
-      if (window.h5sdk) {
-        sdk = window.h5sdk;
-        initH5SDK();
-      } else {
-        setTimeout(waitForH5SDK, 300);
-        statusEl.textContent = '⌛ 等待飞书客户端注入 SDK...';
-      }
-    }
-
-    function initH5SDK() {
-      sdk.ready(() => {
-        statusEl.textContent = '✅ SDK 就绪，点击按钮选择图片';
-        statusEl.className = 'status success';
-        uploadBtn.disabled = false;
-      });
-
-      sdk.error((err) => {
-        statusEl.textContent = `❌ SDK 错误：${err.message || '权限不足或环境异常'}`;
-        statusEl.className = 'status error';
-        uploadBtn.disabled = true;
-        console.error('SDK Error:', err);
-      });
-    }
-
-    // 开始等待 SDK
-    waitForH5SDK();
-
-    // 点击上传逻辑
-    uploadBtn.onclick = async () => {
-      if (!sdk) return;
-      uploadBtn.disabled = true;
-      statusEl.textContent = '⌛ 正在打开图片选择器...';
-      
+  // 插件初始化：获取当前表格和视图信息
+  useEffect(() => {
+    const init = async () => {
       try {
-        // 选择图片
-        const pickRes = await sdk.biz.image.pickImage({
-          count: 1,
-          source: ['album']
-        });
-        if (!pickRes?.images?.length) throw new Error('未选择图片');
-
-        statusEl.textContent = '⌛ 正在上传图片...';
-        // 上传图片
-        const image = pickRes.images[0];
-        const uploadRes = await sdk.biz.image.uploadImage({
-          file: {
-            uri: image.uri,
-            name: image.name || 'image.jpg',
-            type: image.mime || 'image/jpeg'
-          }
-        });
-
-        if (!uploadRes?.url) throw new Error('上传失败，未获取到公开链接');
-        statusEl.textContent = `✅ 上传成功！链接：${uploadRes.url}`;
-        statusEl.className = 'status success';
-      } catch (e) {
-        statusEl.textContent = `❌ 操作失败：${e.message}`;
-        statusEl.className = 'status error';
-        console.error('Upload Error:', e);
-      } finally {
-        uploadBtn.disabled = false;
+        const context = await basekit.getContext();
+        const table = context.table;
+        const view = context.view;
+        if (table && view) {
+          setTableId(table.id);
+          setViewId(view.id);
+          // 获取所有字段
+          const fields = await table.getFields();
+          // 筛选出附件类型字段
+          const attachFields = fields.filter(f => f.type === FieldType.Attachment);
+          setAttachmentFields(attachFields);
+          // 筛选出文本类型字段
+          const textFields = fields.filter(f => f.type === FieldType.Text);
+          setTextFields(textFields);
+        }
+      } catch (error) {
+        console.error('初始化失败:', error);
       }
     };
-  </script>
-</body>
-</html>
+    init();
+  }, []);
+
+  // 获取单个图片附件的临时下载链接
+  const getImageUrl = async (attachment: any): Promise<string | null> => {
+    try {
+      // 1. 从附件对象中提取 file_token
+      const fileToken = attachment.file_token;
+      if (!fileToken) return null;
+
+      // 2. 调用飞书 API 获取临时下载链接
+      //    注意：生产环境应考虑权限问题，可能需要后端代理
+      const response = await fetch(`https://open.feishu.cn/open-apis/drive/v1/medias/${fileToken}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${await basekit.getAccessToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`获取链接失败: ${response.status}`);
+      }
+
+      // 3. 从响应头或返回的JSON中提取下载链接
+      //    根据飞书API，下载链接通常在响应头的 Location 中，或者返回的 JSON 的 data.url 字段
+      const location = response.headers.get('Location');
+      if (location) {
+        return location;
+      }
+
+      const data = await response.json();
+      return data?.data?.url || null;
+    } catch (error) {
+      console.error('获取图片链接失败:', error);
+      return null;
+    }
+  };
+
+  // 处理单条记录，更新图片链接
+  const processRecord = async (recordId: string, attachmentFieldId: string, textFieldId: string) => {
+    try {
+      const table = await basekit.getTable(tableId);
+      const record = await table.getRecord(recordId);
+      const cell = record.fields[attachmentFieldId] as IAttachmentCell;
+
+      if (!cell || !cell.attachments || cell.attachments.length === 0) {
+        return; // 无图片附件，跳过
+      }
+
+      // 获取第一个附件的链接（可根据需要处理多个）
+      const firstAttachment = cell.attachments[0];
+      const imageUrl = await getImageUrl(firstAttachment);
+
+      if (imageUrl) {
+        // 更新文本字段
+        await table.updateRecord(recordId, {
+          [textFieldId]: imageUrl,
+        });
+      }
+    } catch (error) {
+      console.error(`处理记录 ${recordId} 失败:`, error);
+    }
+  };
+
+  // 主处理函数：批量转换
+  const handleConvert = async () => {
+    if (!selectedAttachmentField || !selectedTextField) {
+      alert('请选择附件列和文本列');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress('开始处理...');
+
+    try {
+      const table = await basekit.getTable(tableId);
+      const records = await table.getRecords(); // 注意：大数据量可能需要分页
+
+      let processed = 0;
+      for (const record of records) {
+        setProgress(`正在处理第 ${processed + 1}/${records.length} 条记录...`);
+        await processRecord(record.recordId, selectedAttachmentField, selectedTextField);
+        processed++;
+      }
+
+      setProgress(`处理完成！共处理 ${processed} 条记录。`);
+    } catch (error) {
+      console.error('批量处理失败:', error);
+      setProgress('处理失败，请查看控制台错误信息。');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px' }}>
+      <h3>图片转链接工具</h3>
+      <div style={{ marginBottom: '15px' }}>
+        <label>选择图片附件列：</label>
+        <select
+          value={selectedAttachmentField}
+          onChange={(e) => setSelectedAttachmentField(e.target.value)}
+          style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+        >
+          <option value="">请选择...</option>
+          {attachmentFields.map(field => (
+            <option key={field.id} value={field.id}>{field.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label>选择存放链接的文本列：</label>
+        <select
+          value={selectedTextField}
+          onChange={(e) => setSelectedTextField(e.target.value)}
+          style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+        >
+          <option value="">请选择...</option>
+          {textFields.map(field => (
+            <option key={field.id} value={field.id}>{field.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        onClick={handleConvert}
+        disabled={isProcessing}
+        style={{
+          width: '100%',
+          padding: '10px',
+          backgroundColor: '#3370ff',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: isProcessing ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {isProcessing ? '处理中...' : '开始转换'}
+      </button>
+
+      {progress && (
+        <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+          {progress}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
